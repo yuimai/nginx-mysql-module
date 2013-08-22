@@ -6,10 +6,10 @@ Redistribution and use in source and binary forms, with or without modification,
 are permitted provided that the following conditions are met:
 
    1. Redistributions of source code must retain the above copyright notice, 
-      this list of conditions and the following disclaimer.
+	  this list of conditions and the following disclaimer.
 
    2. Redistributions in binary form must reproduce the above copyright notice, 
-      this list of conditions and the following disclaimer in the documentation
+	  this list of conditions and the following disclaimer in the documentation
 	  and/or other materials provided with the distribution.
 
 THIS SOFTWARE IS PROVIDED BY THE AUTHOR ''AS IS'' AND ANY EXPRESS OR IMPLIED
@@ -192,30 +192,30 @@ static ngx_command_t ngx_http_mysql_commands[] = {
 /* Module context */
 static ngx_http_module_t ngx_http_mysql_module_ctx = {
 
-	NULL,                               /* preconfiguration */
-	ngx_http_mysql_init,                /* postconfiguration */
-	NULL,                               /* create main configuration */
-	NULL,                               /* init main configuration */
-	ngx_http_mysql_create_srv_conf,     /* create server configuration */
-	ngx_http_mysql_merge_srv_conf,      /* merge server configuration */
-	ngx_http_mysql_create_loc_conf,     /* create location configuration */
-	ngx_http_mysql_merge_loc_conf       /* merge location configuration */
+	NULL,							   /* preconfiguration */
+	ngx_http_mysql_init,				/* postconfiguration */
+	NULL,							   /* create main configuration */
+	NULL,							   /* init main configuration */
+	ngx_http_mysql_create_srv_conf,	 /* create server configuration */
+	ngx_http_mysql_merge_srv_conf,	  /* merge server configuration */
+	ngx_http_mysql_create_loc_conf,	 /* create location configuration */
+	ngx_http_mysql_merge_loc_conf	   /* merge location configuration */
 };
 
 /* Module */
 ngx_module_t ngx_http_mysql_module = {
 
 	NGX_MODULE_V1,
-	&ngx_http_mysql_module_ctx,         /* module context */
-	ngx_http_mysql_commands,            /* module directives */
-	NGX_HTTP_MODULE,                    /* module type */
-	NULL,                               /* init master */
-	NULL,                               /* init module */
-	NULL,                               /* init process */
-	NULL,                               /* init thread */
-	NULL,                               /* exit thread */
-	NULL,                               /* exit process */
-	NULL,                               /* exit master */
+	&ngx_http_mysql_module_ctx,		 /* module context */
+	ngx_http_mysql_commands,			/* module directives */
+	NGX_HTTP_MODULE,					/* module type */
+	NULL,							   /* init master */
+	NULL,							   /* init module */
+	NULL,							   /* init process */
+	NULL,							   /* init thread */
+	NULL,							   /* exit thread */
+	NULL,							   /* exit process */
+	NULL,							   /* exit master */
 	NGX_MODULE_V1_PADDING
 };
 
@@ -236,8 +236,10 @@ ngx_int_t ngx_http_mysql_handler(ngx_http_request_t *r) {
 	MYSQL mysql, *sock;
 	MYSQL_RES *res;
 	MYSQL_ROW row;
+	MYSQL_FIELD *fields;
+	
+	char *key;
 	char *value;
-	size_t len;
 	int n, num_fields, status;
 	ngx_chain_t *out, *node, *prev;
 	uint64_t auto_id;
@@ -398,37 +400,47 @@ ngx_int_t ngx_http_mysql_handler(ngx_http_request_t *r) {
 			}
 
 			num_fields = mysql_num_fields(res);
+			fields = mysql_fetch_fields(res);
 
 			while((row = mysql_fetch_row(res))) {
 
 				for(n = 0; n < num_fields; ++n) {
-
+					key = fields[n].name;
 					value = row[n];
 
 					ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, 
 							"MySQL value returned '%s'", value ? value : "NULL");
 
-					len = value ? strlen(value) : 0;
+					if (key && value) {
+						node = (ngx_chain_t*)ngx_palloc(r->connection->pool, sizeof(ngx_chain_t));
+						node->next = NULL;
+						node->buf = ngx_create_temp_buf(r->connection->pool, strlen(key) + strlen(value) + 8);
 
-					node = (ngx_chain_t*)ngx_palloc(r->connection->pool, sizeof(ngx_chain_t));
-					node->next = NULL;
-					node->buf = ngx_create_temp_buf(r->connection->pool, len + 1);
+						node->buf->last += sprintf(
+							(char *)node->buf->pos,
+							"%s%s\"%s\":\"%s\"%s",
+							prev ? "" : "[",
+							n == 0 ? "{" : "",
+							key,
+							value,
+							n == num_fields - 1 ? "}," : ","
+						);
 
-					if (value)
-						memcpy(node->buf->pos, value, len);
+						if (prev) {
+							prev->next = node;
+							prev = node;
+						}
 
-					node->buf->pos[len] = '\n';
-					node->buf->last += ++len;
+						else
+							out = node;
 
-					if (prev)
-						prev->next = node;
+						prev = node;
+					}
 
-					else
-						out = node;
-
-					prev = node;
 				}
 			}
+			if (prev && *(prev->buf->last - 1) == ',')
+				*(prev->buf->last - 1) = ']';
 
 			mysql_free_result(res);
 		}
@@ -562,7 +574,7 @@ static ngx_int_t ngx_http_mysql_subrequest_handler(ngx_http_request_t *r)
 }
 
 static ngx_int_t ngx_http_mysql_get_subrequest_variable(ngx_http_request_t *r,
-		    ngx_http_variable_value_t *v, uintptr_t data)
+			ngx_http_variable_value_t *v, uintptr_t data)
 {
 	ngx_http_mysql_ctx_t *ctx;
 	unsigned n = (unsigned)data;
@@ -609,7 +621,7 @@ static ngx_int_t ngx_http_mysql_get_subrequest_variable(ngx_http_request_t *r,
 }
 
 static ngx_int_t ngx_http_mysql_get_escaped_variable(ngx_http_request_t *r,
-		    ngx_http_variable_value_t *v, uintptr_t data)
+			ngx_http_variable_value_t *v, uintptr_t data)
 {
 	ngx_http_mysql_ctx_t *ctx;
 	ngx_int_t index = (ngx_int_t)data;
